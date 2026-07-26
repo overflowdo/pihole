@@ -200,9 +200,13 @@
         hashedPasswordFile = "/etc/pihole-password-hash";
       };
 
-      # Root-Login vollständig sperren
+      # Kein Root-Login über SSH (PermitRootLogin = "no", s.u.). Aber ein Passwort
+      # für die LOKALE Konsole (Proxmox-Konsole) – sonst ist der Emergency-/
+      # Rescue-Modus nicht nutzbar: mit gesperrtem root (`!`) verweigert sulogin
+      # den Zugang und man kann einen Boot-Fehler nicht mehr debuggen.
+      # Passwort = dasselbe wie beim Nutzer 'pihole' (install.sh schreibt den Hash).
       root = {
-        hashedPassword = "!";
+        hashedPasswordFile = "/etc/pihole-password-hash";
         openssh.authorizedKeys.keys = [];
       };
     };

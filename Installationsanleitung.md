@@ -408,6 +408,29 @@ zu deaktivieren – z.B. CA-Datei einhängen und je nach Runtime setzen:
 - Tipp: die erzeugte `flake.lock` ins Repo committen – sie ist **nicht** in
   `.gitignore` und pinnt nixpkgs/disko/lanzaboote (reproduzierbare Builds).
 
+**Boot landet im „Emergency Mode" / „root account is locked"**
+- Eine Unit ist beim Boot gescheitert (Mount/Swap/Dienst). Ursache finden: im
+  Boot-Screen **hochscrollen (Shift+Bild↑)** zur roten `[FAILED]`-Zeile kurz vor
+  „Reached target Emergency Mode".
+- Kommst du an keine Shell (root gesperrt), per **NixOS-ISO** booten und das Journal
+  des letzten Boots lesen (Partition ggf. anpassen; ohne LUKS):
+  ```bash
+  sudo -i
+  mount -o subvol=var /dev/sda3 /mnt                 # /var-Subvolume
+  journalctl -D /mnt/log/journal -b -1 -p err --no-pager | tail -80
+  ```
+  (Mit LUKS zuerst `cryptsetup open /dev/sda3 cryptroot`, dann `/dev/mapper/cryptroot`.)
+- Reparieren: Root-Subvolume mounten, `nixos-enter`, Config in `/opt/pihole` fixen,
+  `nixos-rebuild boot --flake /opt/pihole#pihole`:
+  ```bash
+  mount -o subvol=root /dev/sda3 /mnt
+  mount -o subvol=nix  /dev/sda3 /mnt/nix
+  mount /dev/sda1 /mnt/boot
+  nixos-enter --root /mnt
+  ```
+- Ab der aktuellen Version hat root ein **Konsolen-Passwort** (= das sudo-Passwort),
+  damit der Emergency-Modus direkt nutzbar ist (SSH-Root bleibt deaktiviert).
+
 **Port 53 belegt**
 - `ss -tulpn | grep :53` – es darf **nur** der Docker-Publish sein. `resolved` ist
   in `networking.nix` deaktiviert; falls doch etwas lauscht, prüfen.
