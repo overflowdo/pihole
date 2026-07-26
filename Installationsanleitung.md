@@ -72,18 +72,21 @@ VM erstellen (Werte, die von den Defaults abweichen):
 | System    | Machine `q35`, SCSI Controller `VirtIO SCSI single`                     |
 | Disk      | `scsi0`, **≥ 20 GB** (siehe Hinweis unten), Discard/SSD-Emulation an    |
 | CPU       | 1 vCPU (Typ `host`)                                                     |
-| Memory    | 1024 MB (**für die Installation temporär ≥ 4096 MB** – siehe Hinweis)    |
+| Memory    | 1024 MB (**für die Installation temporär ≥ 8192 MB** – siehe Hinweis)    |
 | Network   | Bridge `vmbr0` (VirtIO)                                                 |
 
 > **Disk-Größe:** Die Aufgabenstellung nennt 8 GB – das reicht für **Debian**, aber
 > **nicht** für NixOS. Nix-Store + mehrere Generationen brauchen mehr. Nimm
 > **≥ 20 GB** (32 GB komfortabel). `install.sh` legt die Partitionen selbst an.
 
-> **RAM für die Installation (wichtig):** Der Live-Installer wertet nixpkgs aus und
-> baut im **RAM-gestützten** Nix-Store (tmpfs ≈ halbes RAM). Mit nur 1 GB läuft er
-> voll und bricht mit `No space left on device` ab – **das ist nicht die Disk!**
-> Gib der VM **für die Installation temporär ≥ 4 GB** RAM (Proxmox → VM → Hardware →
-> Memory) und stelle sie nach dem finalen `reboot` wieder auf 1–2 GB zurück.
+> **RAM für die Installation (wichtig):** Der Live-Installer wertet die gesamte
+> NixOS-Konfiguration im RAM aus (nixpkgs + lanzaboote/`rust-overlay` sind
+> speicherhungrig) und nutzt zusätzlich einen **RAM-gestützten** Nix-Store
+> (tmpfs ≈ halbes RAM). Mit 1–4 GB scheitert es je nach Phase mit
+> `No space left on device` (tmpfs voll) **oder** `Killed` / OOM (Auswertung).
+> Beides ist **nicht** die Disk. Gib der VM **für die Installation temporär 8 GB**
+> RAM (Proxmox → VM → Hardware → Memory) und stelle sie nach dem finalen `reboot`
+> wieder auf 1–2 GB zurück – der laufende Pi-hole braucht sie nicht.
 
 > **Secure Boot:** Damit lanzaboote greift, in der VM-Firmware Secure Boot im
 > **Setup-Modus** lassen (Werksschlüssel gelöscht). Nach der Installation enrollt
@@ -369,9 +372,27 @@ zu deaktivieren – z.B. CA-Datei einhängen und je nach Runtime setzen:
 - **Nicht die Ziel-Disk!** Der Fehler kommt beim `nix run … mkpasswd` / der
   nixpkgs-Auswertung, also bevor `disko` überhaupt partitioniert. Ursache: der
   Live-ISO baut im **RAM-gestützten** Nix-Store (tmpfs), und 1 GB RAM ist zu wenig.
-- Fix: VM-RAM in Proxmox temporär auf **≥ 4 GB** setzen, ISO neu booten,
+- Fix: VM-RAM in Proxmox temporär auf **8 GB** setzen, ISO neu booten,
   `sudo bash nixos/install.sh` erneut ausführen. Der Fehllauf hat nichts auf die
   Disk geschrieben. Nach dem finalen `reboot` RAM wieder auf 1–2 GB.
+
+**`Killed` / abgebrochene SSH-Sitzung während `nixos-install` (OOM)**
+- `nixos-install: line … Killed … nix … build` = OOM-Killer: der Nix-Prozess
+  wurde wegen Speichermangel beendet (die Config-Auswertung mit lanzaboote/
+  `rust-overlay` ist RAM-intensiv). Der SSH-Abbruch ist nur die Folge.
+- Bestätigen: `sudo dmesg -T | grep -iE 'out of memory|killed process|oom' | tail`
+  und `free -h` (Spalte *available*).
+- **Achtung – tritt auch auf, wenn der Graph noch RAM-Reserve zeigt:** Ursache ist
+  dann **Proxmox-Ballooning**. `MemTotal` bleibt hoch, aber der Balloon-Treiber gibt
+  RAM an den (knappen) Host zurück → real verfügbar ist viel weniger, `available`
+  in `free -h` ist klein. Fix:
+  - Proxmox → VM → Hardware → **Memory: „Minimum memory" = „Memory"** (Ballooning
+    aus) → die VM bekommt fix ihre 8 GB.
+  - Sicherstellen, dass der **Host** ~8 GB frei hat; sonst die **apphost-VM für die
+    einmalige Installation kurz stoppen**, danach wieder starten.
+- Sicherheitsnetz: `install.sh` legt inzwischen automatisch einen temporären
+  **8-GB-Swapfile auf der Zielplatte** an (fängt OOM-Spitzen auch bei knappem RAM
+  ab, wird vor dem Reboot entfernt). Einfach `sudo bash nixos/install.sh` erneut.
 
 **„NAR hash mismatch in input 'path:…'" während `nixos-install`**
 - Ursache: fehlende `flake.lock` – Nix schreibt sie sonst mitten im Build in den

@@ -135,6 +135,24 @@ nixos-generate-config \
 info "hardware-configuration.nix generiert"
 
 # ---- NixOS installieren ----
+# ---- Temporärer Install-Swap ----
+# Die Auswertung der Config (nixpkgs + lanzaboote/rust-overlay) ist speicher-
+# hungrig. Auf VMs mit wenig – oder per Proxmox-Balloon zur Laufzeit reduziertem –
+# RAM beendet der OOM-Killer sonst den nix-Prozess ("Killed"), auch wenn 'Total'
+# hoch aussieht. Ein temporärer Swapfile auf der Zielplatte fängt die Spitze ab.
+# Btrfs verlangt NOCOW (chattr +C auf leerer Datei); wird vor dem Reboot entfernt.
+INSTALL_SWAP=/mnt/nixos-install.swap
+swapoff "$INSTALL_SWAP" 2>/dev/null || true; rm -f "$INSTALL_SWAP" 2>/dev/null || true
+if truncate -s 0 "$INSTALL_SWAP" \
+   && { chattr +C "$INSTALL_SWAP" 2>/dev/null || true; } \
+   && { fallocate -l 8G "$INSTALL_SWAP" 2>/dev/null || dd if=/dev/zero of="$INSTALL_SWAP" bs=1M count=8192 status=none; } \
+   && chmod 600 "$INSTALL_SWAP" && mkswap "$INSTALL_SWAP" >/dev/null && swapon "$INSTALL_SWAP"; then
+  info "Temporärer Install-Swap aktiv (8G auf der Zielplatte) – fängt OOM-Spitzen ab"
+else
+  warn "Install-Swap konnte nicht angelegt werden – fahre ohne fort."
+  rm -f "$INSTALL_SWAP" 2>/dev/null || true; INSTALL_SWAP=""
+fi
+
 # flake.lock erzeugen, BEVOR nixos-install den path:-Input hasht. Fehlt die
 # Lock-Datei, schreibt Nix sie mitten im Build in den Quellbaum -> dessen NAR-Hash
 # ändert sich -> "NAR hash mismatch in input 'path:...'". Einmal vorab erzeugen
@@ -258,6 +276,13 @@ echo -e "  ${B}3.${N} Verifizieren:     verify        (= scripts/verify-dns.sh)"
 echo -e "  ${B}4.${N} Admin-Passwort:   grep FTLCONF_webserver_api_password /opt/pihole/.env"
 echo -e "     Web-UI:  http://192.168.178.5/admin"
 echo ""
+
+# Temporären Install-Swap wieder entfernen (lag auf der Zielplatte /mnt)
+if [[ -n "${INSTALL_SWAP:-}" ]]; then
+  swapoff "$INSTALL_SWAP" 2>/dev/null || true
+  rm -f "$INSTALL_SWAP" 2>/dev/null || true
+  info "Temporären Install-Swap entfernt"
+fi
 
 for i in 5 4 3 2 1; do
   echo -ne "\r  ${Y}Neustart in ${i} Sekunden... (Strg+C zum Abbrechen)${N}  "

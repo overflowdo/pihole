@@ -19,7 +19,7 @@
   systemd.network.networks."10-lan" = {
     matchConfig.Name = "en*";                       # ggf. an echten NIC anpassen (ens18)
     address          = [ "192.168.178.5/24" ];
-    routes           = [ { routeConfig.Gateway = "192.168.178.1"; } ];
+    routes           = [ { Gateway = "192.168.178.1"; } ];
     linkConfig.RequiredForOnline = "routable";
   };
 
