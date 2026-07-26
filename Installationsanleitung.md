@@ -72,12 +72,18 @@ VM erstellen (Werte, die von den Defaults abweichen):
 | System    | Machine `q35`, SCSI Controller `VirtIO SCSI single`                     |
 | Disk      | `scsi0`, **≥ 20 GB** (siehe Hinweis unten), Discard/SSD-Emulation an    |
 | CPU       | 1 vCPU (Typ `host`)                                                     |
-| Memory    | 1024 MB                                                                 |
+| Memory    | 1024 MB (**für die Installation temporär ≥ 4096 MB** – siehe Hinweis)    |
 | Network   | Bridge `vmbr0` (VirtIO)                                                 |
 
 > **Disk-Größe:** Die Aufgabenstellung nennt 8 GB – das reicht für **Debian**, aber
 > **nicht** für NixOS. Nix-Store + mehrere Generationen brauchen mehr. Nimm
 > **≥ 20 GB** (32 GB komfortabel). `install.sh` legt die Partitionen selbst an.
+
+> **RAM für die Installation (wichtig):** Der Live-Installer wertet nixpkgs aus und
+> baut im **RAM-gestützten** Nix-Store (tmpfs ≈ halbes RAM). Mit nur 1 GB läuft er
+> voll und bricht mit `No space left on device` ab – **das ist nicht die Disk!**
+> Gib der VM **für die Installation temporär ≥ 4 GB** RAM (Proxmox → VM → Hardware →
+> Memory) und stelle sie nach dem finalen `reboot` wieder auf 1–2 GB zurück.
 
 > **Secure Boot:** Damit lanzaboote greift, in der VM-Firmware Secure Boot im
 > **Setup-Modus** lassen (Werksschlüssel gelöscht). Nach der Installation enrollt
@@ -358,6 +364,28 @@ zu deaktivieren – z.B. CA-Datei einhängen und je nach Runtime setzen:
   ```
 - Host-seitig gehört der Volume-Inhalt der Remap-Range (100000+), das ist korrekt:
   `ls -l /var/lib/docker/*/volumes/pihole_etc/_data` zeigt UID 100000-ish.
+
+**„No space left on device" während `install.sh` (vor dem Partitionieren)**
+- **Nicht die Ziel-Disk!** Der Fehler kommt beim `nix run … mkpasswd` / der
+  nixpkgs-Auswertung, also bevor `disko` überhaupt partitioniert. Ursache: der
+  Live-ISO baut im **RAM-gestützten** Nix-Store (tmpfs), und 1 GB RAM ist zu wenig.
+- Fix: VM-RAM in Proxmox temporär auf **≥ 4 GB** setzen, ISO neu booten,
+  `sudo bash nixos/install.sh` erneut ausführen. Der Fehllauf hat nichts auf die
+  Disk geschrieben. Nach dem finalen `reboot` RAM wieder auf 1–2 GB.
+
+**„NAR hash mismatch in input 'path:…'" während `nixos-install`**
+- Ursache: fehlende `flake.lock` – Nix schreibt sie sonst mitten im Build in den
+  `path:`-Quellbaum, wodurch dessen Hash kippt. Die aktuelle `install.sh` erzeugt
+  die Lock-Datei automatisch vorab. Mit einer älteren Version einmalig manuell:
+  ```bash
+  cd ~/pihole
+  nix flake lock --extra-experimental-features "nix-command flakes" "path:$PWD"
+  sudo bash nixos/install.sh          # erneut; nixos-install findet nun die Lock
+  ```
+  Danach auf dem laufenden System einmalig `cd /opt/pihole && sudo nix flake lock`,
+  damit auch `rebuild`/`update` die Lock haben.
+- Tipp: die erzeugte `flake.lock` ins Repo committen – sie ist **nicht** in
+  `.gitignore` und pinnt nixpkgs/disko/lanzaboote (reproduzierbare Builds).
 
 **Port 53 belegt**
 - `ss -tulpn | grep :53` – es darf **nur** der Docker-Publish sein. `resolved` ist

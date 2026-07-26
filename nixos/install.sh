@@ -135,6 +135,15 @@ nixos-generate-config \
 info "hardware-configuration.nix generiert"
 
 # ---- NixOS installieren ----
+# flake.lock erzeugen, BEVOR nixos-install den path:-Input hasht. Fehlt die
+# Lock-Datei, schreibt Nix sie mitten im Build in den Quellbaum -> dessen NAR-Hash
+# ändert sich -> "NAR hash mismatch in input 'path:...'". Einmal vorab erzeugen
+# macht den Baum für den nachfolgenden Build stabil (und pinnt die Inputs).
+if [[ ! -f "$REPO_DIR/flake.lock" ]]; then
+  info "Erzeuge flake.lock (pinnt nixpkgs/disko/lanzaboote)..."
+  nix flake lock "${NIX_FLAGS[@]}" "path:$REPO_DIR"
+fi
+
 # Flake aus $REPO_DIR evaluieren (außerhalb von /mnt), sonst NAR-Hash-Konflikt.
 info "Starte nixos-install ohne Bootloader (dauert einen Moment)..."
 # --no-bootloader: lanzaboote braucht die Secure-Boot-Schlüssel, die es noch nicht
@@ -191,8 +200,11 @@ if [[ -n "$MONOREPO_REMOTE" ]]; then
   git clone --branch "$MONOREPO_BRANCH" "$MONOREPO_ROOT" "$APP_DIR"
   git -C "$APP_DIR" remote set-url origin "$MONOREPO_REMOTE"
   # Maschinenspezifische, gitignorte Dateien nachziehen (frisch in diesem Lauf erzeugt).
-  for f in nixos/hardware-configuration.nix nixos/ssh-key.nix nixos/disk-encryption.nix; do
-    cp "$REPO_DIR/$f" "$APP_DIR/$f"
+  # flake.lock mitnehmen: liegt sie (frisch erzeugt) nur lokal und nicht im
+  # geklonten Stand, hätte /opt/pihole keine -> 'rebuild'/'update' liefen erneut
+  # in den NAR-Hash-Fehler. Falls schon im Repo committet, ist es ein No-op.
+  for f in nixos/hardware-configuration.nix nixos/ssh-key.nix nixos/disk-encryption.nix flake.lock; do
+    [[ -f "$REPO_DIR/$f" ]] && cp "$REPO_DIR/$f" "$APP_DIR/$f"
   done
 else
   warn "Kein Git-Remote gefunden. Kopiere Repo ohne Versionierung (kein 'git pull' möglich)."
