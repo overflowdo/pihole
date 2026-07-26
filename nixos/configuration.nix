@@ -266,8 +266,9 @@
     # Nix-Store aufräumen
     gc = "sudo nix-collect-garbage --delete-older-than 30d && sudo nix store optimise";
 
-    # Pi-hole-Container
-    up      = "cd /opt/pihole && docker compose up -d";
+    # Pi-hole-Container. 'up' startet den Container UND stellt die Blocklisten
+    # sicher (seed-adlists ist idempotent + lädt nur bei Änderung nach -> billig).
+    up      = "cd /opt/pihole && docker compose up -d && bash scripts/seed-adlists.sh";
     down    = "cd /opt/pihole && docker compose down";
     restart = "cd /opt/pihole && docker compose restart";
     logs    = "cd /opt/pihole && docker compose logs -f";
@@ -284,8 +285,13 @@
     # Wildcard-DNS verifizieren (*.apphost.lan -> App-Host-VM)
     verify = "bash /opt/pihole/scripts/verify-dns.sh";
 
-    # Kuratierte Blocklisten setzen + Gravity aktualisieren
+    # Kuratierte Blocklisten setzen (Subscriptions sicherstellen) + ggf. laden.
+    # Läuft auch automatisch bei jedem 'up'.
     seed-lists = "bash /opt/pihole/scripts/seed-adlists.sh";
+
+    # Blocklisten JETZT neu laden (Download + Rebuild aller abonnierten Listen;
+    # sonst erledigt das ohnehin der wöchentliche Pi-hole-Cron).
+    update-blacklist = "docker exec pihole pihole -g";
   };
 
   # SSH – maximale Härtung (identisch zum apphost-Repo)

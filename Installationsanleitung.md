@@ -290,13 +290,21 @@ docker exec pihole pihole-FTL --config
 **Blocklisten (Ads/Tracking/Malware)** liegen in der `gravity.db` (nicht in
 `pihole.toml`), daher nicht per `FTLCONF`. Reproduzierbar über das versionierte
 Skript mit kuratierten Listen (StevenBlack, OISD, HaGeZi Pro + Threat-Intel):
-```bash
-seed-lists            # = bash /opt/pihole/scripts/seed-adlists.sh
-```
-Listen ändern → URLs in `scripts/seed-adlists.sh` anpassen, `seed-lists` erneut.
-Nach einem Volume-Reset (`docker volume rm pihole_etc`) einmal `seed-lists`, um die
-Listen wiederherzustellen. Einzelne False-Positives in der Web-UI unter *Domains*
-freigeben.
+
+- **Automatisch:** `up` stellt die Listen bei jedem Start sicher (`seed-adlists.sh`
+  ist idempotent und lädt Gravity nur nach, wenn sich die Liste geändert hat). Die
+  Listen liegen im persistenten Volume – überleben also Reboots und `up`/`down`;
+  neu geseedet wird nur nach einem Volume-Reset (und der wird ja von `up` gefolgt).
+- **Listen ändern:** URLs in `scripts/seed-adlists.sh` anpassen → `seed-lists`.
+- **Inhalt sofort aktualisieren** (statt auf den wöchentlichen Cron zu warten):
+  `update-blacklist`  (= `docker exec pihole pihole -g`).
+- **False-Positive** freigeben: Web-UI → *Domains* (Allow).
+
+| Befehl | Zweck |
+| --- | --- |
+| `seed-lists` | kuratierte Listen sicherstellen (läuft auch bei `up`) |
+| `update-blacklist` | abonnierte Listen **jetzt** neu herunterladen + rebuilden |
+| *(Wochen-Cron)* | macht `update-blacklist` automatisch 1×/Woche |
 
 ---
 
