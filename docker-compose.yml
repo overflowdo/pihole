@@ -1,0 +1,97 @@
+# Pi-hole v6 – Wildcard-DNS für apphost.lan
+#
+# Läuft unter dem Docker-Daemon mit userns-remap (nixos/modules/docker.nix):
+# Container-UID 0 ist host-UID 100000+, also KEIN echtes root. Zusätzlich hier
+# per-Container gehärtet – gleicher Stil wie im apphost-Repo:
+#   cap_drop: [ALL] (+ nur die nötigen Caps), no-new-privileges, Resource-Limits.
+name: pihole
+
+networks:
+  pihole-net:
+    name: pihole-net
+    driver: bridge
+
+volumes:
+  # Pi-hole-State (v6: pihole.toml, FTL-DB, Gravity, Listen). Named Volume, damit
+  # Docker unter userns-remap die Eigentümerrechte korrekt in die Remap-Range legt.
+  pihole_etc:
+    name: pihole_etc
+
+services:
+  pihole:
+    image: docker.io/pihole/pihole:latest
+    # ^ Für Reproduzierbarkeit auf ein Digest pinnen (Renovate macht das automatisch):
+    #     image: docker.io/pihole/pihole:2025.xx.x@sha256:...
+    #   Digest holen:  skopeo inspect docker://docker.io/pihole/pihole:latest | jq -r .Digest
+    container_name: pihole
+    hostname: pihole
+    restart: unless-stopped
+    runtime: runc
+
+    networks:
+      pihole-net: {}
+
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "80:80/tcp"          # Admin-Weboberfläche (nftables lässt nur das LAN zu)
+
+    # docker compose liest ./.env automatisch für die ${...}-Interpolation.
+    environment:
+      TZ: ${TZ:-Europe/Berlin}
+      # Admin-/API-Passwort (Pi-hole v6) – MUSS in .env gesetzt sein.
+      FTLCONF_webserver_api_password: ${FTLCONF_webserver_api_password:?FTLCONF_webserver_api_password fehlt in .env}
+      # Upstream = FritzBox, damit fritz.box & andere lokale Namen weiter auflösen.
+      FTLCONF_dns_upstreams: ${FTLCONF_dns_upstreams:-192.168.178.1}
+      # Anfragen aus dem ganzen LAN + von Docker-Containern annehmen.
+      FTLCONF_dns_listeningMode: "all"
+      # WICHTIG (v6): /etc/dnsmasq.d/ laden -> aktiviert die Wildcard-Datei unten.
+      FTLCONF_misc_etc_dnsmasq_d: "true"
+
+    volumes:
+      - pihole_etc:/etc/pihole
+      # Das GANZE dnsmasq.d/ read-only in den Container: die apphost-Wildcard
+      # UND alle eigenen Regel-Dateien. Neue Datei dnsmasq.d/*.conf anlegen
+      # -> up/restart, fertig. Pi-hole v6 legt seine eigene Config unter
+      # /etc/pihole/ ab, hier wird also nichts überschrieben.
+      - ./dnsmasq.d:/etc/dnsmasq.d:ro
+
+    # ── Rechte / UID-Modell (userns-remap) ─────────────────────────────────────
+    # Der Daemon läuft mit userns-remap: Container-UID 0 = host-UID 100000, also
+    # KEIN echtes root – das ist die "kein Container als root"-Garantie. Deshalb
+    # bewusst KEIN `user:`-Override: Pi-holes s6-Init MUSS als (gemapptes) root
+    # starten, um /etc/pihole zu initialisieren und 53/80 zu binden, bevor FTL
+    # die Rechte selbst ablegt. Ein erzwungenes user:1000 würde Pi-hole brechen
+    # (anders als z.B. Grafana im apphost-Repo).
+    #   • /etc/pihole = NAMED Volume  -> Docker vergibt die Rechte in der
+    #     Remap-Range, Container-root besitzt & initialisiert es (CHOWN-Cap).
+    #     Kein host-chown nötig (der Bind-Mount-Umweg wie bei apphosts Authelia
+    #     entfällt).
+    #   • dnsmasq.d = :ro Bind-Mount, world-readable (0644) -> im Container als
+    #     "nobody" sichtbar, aber lesbar. install.sh sichert die Modes explizit.
+    #   • .env liest nur `docker compose` am Host (als pihole, 0600).
+
+    # ── Härtung ────────────────────────────────────────────────────────────────
+    security_opt:
+      - no-new-privileges:true
+    cap_drop: [ALL]
+    cap_add:
+      - CHOWN              # Entrypoint chownt /etc/pihole auf den pihole-User
+      - SETGID             # Privilegien vom Container-root auf den pihole-User ablegen
+      - SETUID
+      - NET_BIND_SERVICE   # Ports 53/80 (<1024) binden
+      - NET_RAW            # FTL: ARP-/Neighbor-Checks
+      - SYS_NICE           # FTL: Prozess-Prioritäten
+      # Falls FTL beim Start scheitert ("permission denied"/s6-Fehler): zuerst
+      # DAC_OVERRIDE bzw. FOWNER ergänzen, im Notfall no-new-privileges entfernen.
+
+    deploy:
+      resources:
+        limits:       {cpus: "1.0", memory: 512M}
+        reservations: {memory: 128M}
+
+    # Hinweis: Das Pi-hole-Image bringt einen eigenen HEALTHCHECK mit (FTL/DNS),
+    # daher hier keine zusätzliche healthcheck-Definition.
+
+    labels:
+      - "traefik.enable=false"

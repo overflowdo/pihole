@@ -1,0 +1,39 @@
+# Umgebungsvariablen / Secrets (NIEMALS committen!)
+.env
+.env.local
+.env.*.local
+
+# NixOS maschinenspezifische Dateien (von nixos/install.sh pro Installation generiert)
+nixos/hardware-configuration.nix
+nixos/ssh-key.nix
+nixos/disk-encryption.nix
+
+# Nix build outputs
+result
+result-*
+
+# Zertifikate und Schlüssel
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# Editor
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Temporär / Backup
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup

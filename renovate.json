@@ -1,0 +1,43 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    ":dependencyDashboard",
+    ":semanticCommits"
+  ],
+  "timezone": "Europe/Berlin",
+  "labels": ["dependencies", "renovate"],
+
+  "ignorePaths": [
+    ".env",
+    "scripts/**"
+  ],
+
+  "docker-compose": {
+    "managerFilePatterns": [
+      "/(^|/)(?:docker-)?compose[^/]*\\.ya?ml$/"
+    ]
+  },
+
+  "packageRules": [
+    {
+      "description": "Major Updates manuell bestätigen",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "labels": ["dependencies", "major-update"],
+      "minimumReleaseAge": "14 days"
+    },
+    {
+      "description": "Unpinned Container-Images sofort automatisch auf Digest pinnen",
+      "matchUpdateTypes": ["pinDigest"],
+      "groupName": "Pin unpinned container image digests",
+      "groupSlug": "pin-container-digests",
+      "automerge": true,
+      "automergeType": "branch",
+      "platformAutomerge": true,
+      "prCreation": "immediate",
+      "schedule": ["at any time"]
+    }
+  ]
+}
