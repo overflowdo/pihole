@@ -140,10 +140,15 @@ docker ps     # pihole sollte "healthy" sein
 verify        # prüft *.apphost.lan  (scripts/verify-dns.sh)
 ```
 
-Admin-Passwort auslesen / Web-UI:
+Admin-Passwort: `install.sh` fragt es ab (leer = Zufallspasswort, wird am Ende
+angezeigt). Auslesen / **ändern** auf dem laufenden System – einfach in der `.env`
+setzen, dann `up` (die `FTLCONF_…`-Variable überschreibt alles bei jedem Start):
 
 ```bash
-grep FTLCONF_webserver_api_password /opt/pihole/.env
+grep FTLCONF_webserver_api_password /opt/pihole/.env     # aktuelles Passwort
+# ändern:
+nano /opt/pihole/.env      # FTLCONF_webserver_api_password=DEIN-PASSWORT
+up                         # übernimmt es (Container wird neu erstellt)
 # Web-UI:  http://192.168.178.5/admin
 ```
 

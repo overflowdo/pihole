@@ -231,9 +231,31 @@ else
 fi
 
 # ---- .env mit Pi-hole-Admin-Passwort erzeugen ----
-info "Erzeuge /opt/pihole/.env mit einem zufälligen Admin-Passwort..."
-# openssl ist auf dem Live-ISO nicht vorinstalliert -> via nix run.
-PIHOLE_WEB_PW="$(nix run "${NIX_FLAGS[@]}" nixpkgs#openssl -- rand -base64 18)"
+# Passwort für die Web-Oberfläche (http://<IP>/admin) abfragen. Leer = zufällig.
+echo ""
+echo "  Pi-hole-Admin-Passwort (Web-Oberfläche http://192.168.178.5/admin)."
+echo "  Leer lassen -> es wird ein Zufallspasswort erzeugt und am Ende angezeigt."
+echo ""
+PIHOLE_PW_GENERATED=0
+if [[ $# -ge 5 ]]; then
+  PIHOLE_WEB_PW="$5"
+  info "Pi-hole-Passwort per Argument gesetzt, überspringe."
+else
+  while true; do
+    read -rsp "  Pi-hole-Admin-Passwort: " PW1; echo ""
+    if [[ -z "$PW1" ]]; then
+      # openssl ist auf dem Live-ISO nicht vorinstalliert -> via nix run.
+      PIHOLE_WEB_PW="$(nix run "${NIX_FLAGS[@]}" nixpkgs#openssl -- rand -base64 18)"
+      PIHOLE_PW_GENERATED=1
+      info "Kein Passwort eingegeben – Zufallspasswort wird erzeugt."
+      break
+    fi
+    read -rsp "  Passwort bestätigen:   " PW2; echo ""
+    [[ "$PW1" == "$PW2" ]] && { PIHOLE_WEB_PW="$PW1"; break; }
+    warn "Passwörter stimmen nicht überein. Bitte erneut."
+  done
+  unset PW1 PW2
+fi
 ENV_FILE="$APP_DIR/.env"
 cp "$APP_DIR/.env.example" "$ENV_FILE"
 # Passwort per Umgebungsvariable durchreichen (nicht als argv -> nicht in 'ps' sichtbar).
@@ -273,7 +295,12 @@ echo -e "  ${B}Nach dem Neustart:${N}"
 echo -e "  ${B}1.${N} SSH-Login:        ssh pihole@192.168.178.5"
 echo -e "  ${B}2.${N} Pi-hole starten:  up            (= cd /opt/pihole && docker compose up -d)"
 echo -e "  ${B}3.${N} Verifizieren:     verify        (= scripts/verify-dns.sh)"
-echo -e "  ${B}4.${N} Admin-Passwort:   grep FTLCONF_webserver_api_password /opt/pihole/.env"
+if [[ "${PIHOLE_PW_GENERATED:-0}" == "1" ]]; then
+  echo -e "  ${B}4.${N} Admin-Passwort (zufällig erzeugt): ${Y}${PIHOLE_WEB_PW}${N}"
+  echo -e "     (jederzeit änderbar in /opt/pihole/.env -> danach 'up')"
+else
+  echo -e "  ${B}4.${N} Admin-Passwort:   das von dir vergebene (steht in /opt/pihole/.env)"
+fi
 echo -e "     Web-UI:  http://192.168.178.5/admin"
 echo ""
 
