@@ -47,6 +47,13 @@ services:
       FTLCONF_dns_listeningMode: "all"
       # WICHTIG (v6): /etc/dnsmasq.d/ laden -> aktiviert die Wildcard-Datei unten.
       FTLCONF_misc_etc_dnsmasq_d: "true"
+      # FTL als (gemapptes) root im Container laufen lassen. Unter userns-remap ist
+      # das host-UID 100000 – KEIN echtes root. Nötig wegen no-new-privileges: der
+      # Kernel ignoriert damit File-Caps beim exec, weshalb Pi-holes non-root-Weg
+      # (setcap auf pihole-FTL) scheitert: "Unable to set capabilities for
+      # pihole-FTL. Cannot run as non-root". Als Container-root nutzt FTL direkt
+      # die cap_add-Caps unten.
+      DNSMASQ_USER: "root"
 
     volumes:
       - pihole_etc:/etc/pihole
@@ -59,10 +66,10 @@ services:
     # ── Rechte / UID-Modell (userns-remap) ─────────────────────────────────────
     # Der Daemon läuft mit userns-remap: Container-UID 0 = host-UID 100000, also
     # KEIN echtes root – das ist die "kein Container als root"-Garantie. Deshalb
-    # bewusst KEIN `user:`-Override: Pi-holes s6-Init MUSS als (gemapptes) root
-    # starten, um /etc/pihole zu initialisieren und 53/80 zu binden, bevor FTL
-    # die Rechte selbst ablegt. Ein erzwungenes user:1000 würde Pi-hole brechen
-    # (anders als z.B. Grafana im apphost-Repo).
+    # bewusst KEIN `user:`-Override: Pi-holes s6-Init läuft als (gemapptes) root,
+    # initialisiert /etc/pihole und bindet 53/80; FTL bleibt via DNSMASQ_USER=root
+    # (s.o.) ebenfalls gemapptes root (nötig wegen no-new-privileges). Ein
+    # erzwungenes user:1000 würde Pi-hole brechen (anders als z.B. Grafana im apphost).
     #   • /etc/pihole = NAMED Volume  -> Docker vergibt die Rechte in der
     #     Remap-Range, Container-root besitzt & initialisiert es (CHOWN-Cap).
     #     Kein host-chown nötig (der Bind-Mount-Umweg wie bei apphosts Authelia
@@ -82,8 +89,9 @@ services:
       - NET_BIND_SERVICE   # Ports 53/80 (<1024) binden
       - NET_RAW            # FTL: ARP-/Neighbor-Checks
       - SYS_NICE           # FTL: Prozess-Prioritäten
-      # Falls FTL beim Start scheitert ("permission denied"/s6-Fehler): zuerst
-      # DAC_OVERRIDE bzw. FOWNER ergänzen, im Notfall no-new-privileges entfernen.
+      # Kein SETFCAP nötig: FTL läuft via DNSMASQ_USER=root (s.o.) als gemapptes
+      # root und braucht kein setcap auf sein Binary. Sollte FTL doch mal an
+      # Dateirechten scheitern, testweise DAC_OVERRIDE/FOWNER ergänzen.
 
     deploy:
       resources:

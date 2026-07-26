@@ -347,9 +347,18 @@ zu deaktivieren – z.B. CA-Datei einhängen und je nach Runtime setzen:
 - Nutzt der Client wirklich `.5`? `nslookup auth.apphost.lan 192.168.178.5`
   gegentesten (fragt den Pi-hole direkt).
 
-**Container startet nicht / FTL-Fehler beim Start**
+**Container-Crashloop: „Unable to set capabilities for pihole-FTL. Cannot run as non-root"**
+- `unable to set CAP_SETFCAP … Operation not permitted`: Pi-hole will FTL als
+  non-root (uid 1000) laufen lassen und dazu `setcap` aufs Binary anwenden. Das
+  scheitert hier doppelt: `CAP_SETFCAP` ist nicht erlaubt, und `no-new-privileges`
+  ignoriert File-Caps ohnehin beim `exec`.
+- Fix (bereits in `docker-compose.yml`): `DNSMASQ_USER: "root"` – FTL läuft dann als
+  Container-root, das unter `userns-remap` **host-UID 100000** ist (kein echtes
+  root). Danach `down && up`.
+
+**Sonstige FTL-/Rechte-Fehler beim Start**
 - In `docker-compose.yml` unter `cap_add` testweise `DAC_OVERRIDE` und `FOWNER`
-  ergänzen; im Notfall `no-new-privileges` entfernen. `logs` zeigt die Ursache.
+  ergänzen. `logs` zeigt die Ursache.
 
 **„permission denied" auf `/etc/dnsmasq.d/...` oder `/etc/pihole` (userns-remap)**
 - Rechte der Regel-Dateien prüfen (müssen world-readable sein, weil der host-User
