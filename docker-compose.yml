@@ -83,15 +83,15 @@ services:
       - no-new-privileges:true
     cap_drop: [ALL]
     cap_add:
-      - CHOWN              # Entrypoint chownt /etc/pihole auf den pihole-User
-      - SETGID             # Privilegien vom Container-root auf den pihole-User ablegen
+      - CHOWN              # Entrypoint chownt /etc/pihole
+      - DAC_OVERRIDE       # in /etc/pihole schreiben unabhängig von Dateirechten
+      - FOWNER             # chmod auf Volume-Dateien, die dem pihole-User (uid 1000) gehören
+      - SETGID             # User-Setup / Privilegien-Handling
       - SETUID
       - NET_BIND_SERVICE   # Ports 53/80 (<1024) binden
       - NET_RAW            # FTL: ARP-/Neighbor-Checks
       - SYS_NICE           # FTL: Prozess-Prioritäten
-      # Kein SETFCAP nötig: FTL läuft via DNSMASQ_USER=root (s.o.) als gemapptes
-      # root und braucht kein setcap auf sein Binary. Sollte FTL doch mal an
-      # Dateirechten scheitern, testweise DAC_OVERRIDE/FOWNER ergänzen.
+      # Kein SETFCAP nötig: FTL läuft via DNSMASQ_USER=root (s.o.) als gemapptes root.
 
     deploy:
       resources:

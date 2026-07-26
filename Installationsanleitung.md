@@ -356,6 +356,27 @@ zu deaktivieren – z.B. CA-Datei einhängen und je nach Runtime setzen:
   Container-root, das unter `userns-remap` **host-UID 100000** ist (kein echtes
   root). Danach `down && up`.
 
+**Container: viele „Operation not permitted" / „Permission denied" auf `/etc/pihole/…`**
+- Ursache: das Named Volume `pihole_etc` wurde in einem früheren (non-root-)Fehlversuch
+  mit gemischten Eigentümern befüllt; der Container darf fremde Dateien ohne `FOWNER`/
+  `DAC_OVERRIDE` nicht anfassen. Beide Caps sind jetzt in `docker-compose.yml`.
+- Sicherste Reparatur (frischer Pi-hole, kein echter Datenverlust – Gravity/Listen
+  werden neu aufgebaut):
+  ```bash
+  down
+  docker volume rm pihole_etc
+  up
+  ```
+
+**`git pull` in `/opt/pihole`: „dubious ownership" oder „.git/FETCH_HEAD: keine Berechtigung"**
+- Entsteht, wenn man versehentlich `sudo git pull` laufen lässt (legt root-Dateien in
+  `.git/` an). Besitz wieder geradeziehen, dann ohne sudo pullen:
+  ```bash
+  sudo chown -R pihole:docker /opt/pihole
+  cd /opt/pihole && git pull
+  ```
+  (Der `pull`-Alias nutzt ab dieser Version kein `sudo` mehr.)
+
 **Sonstige FTL-/Rechte-Fehler beim Start**
 - In `docker-compose.yml` unter `cap_add` testweise `DAC_OVERRIDE` und `FOWNER`
   ergänzen. `logs` zeigt die Ursache.

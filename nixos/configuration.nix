@@ -251,15 +251,17 @@
   # Shell-Aliase – dieselbe Bedienung wie apphost (pull/update/rebuild/up/down/…),
   # angepasst auf /opt/pihole und den einzelnen Pi-hole-Container.
   environment.shellAliases = {
-    # Updates aus dem lokalen Repo holen (siehe install.sh: /opt/pihole)
-    pull = "cd /opt/pihole && sudo git pull";
+    # Updates aus dem lokalen Repo holen (siehe install.sh: /opt/pihole).
+    # Ohne sudo: /opt/pihole gehört dem User 'pihole' – sudo würde git als root
+    # ausführen und "detected dubious ownership" auslösen.
+    pull = "cd /opt/pihole && git pull";
 
     # NixOS rebuilden
     rebuild      = "sudo nixos-rebuild switch --flake path:/opt/pihole#pihole";
     rebuild-boot = "sudo nixos-rebuild boot   --flake path:/opt/pihole#pihole";
 
     # Updates holen, Flake-Inputs aktualisieren + sofort rebuilden
-    update = "pull && cd /opt/pihole && sudo nix flake update && sudo nixos-rebuild switch --flake path:/opt/pihole#pihole";
+    update = "pull && cd /opt/pihole && nix flake update && sudo nixos-rebuild switch --flake path:/opt/pihole#pihole";
 
     # Nix-Store aufräumen
     gc = "sudo nix-collect-garbage --delete-older-than 30d && sudo nix store optimise";
