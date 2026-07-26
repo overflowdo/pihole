@@ -275,6 +275,29 @@ Container-Volume (`pihole.toml`), sind **nicht** im Git-Repo und weg bei einem
 Volume-Reset. Außerdem kann die normale UI **keine Wildcards** (nur `dnsmasq_lines`).
 Für einen reproduzierbaren Stand daher Weg 1 nutzen.
 
+### Sicherheit & Werbeblocken
+
+**Sicherheits-/Privacy-Einstellungen** stehen deklarativ als `FTLCONF_*` in
+`docker-compose.yml` (DNSSEC, `domainNeeded`, `bogusPriv`, `blockESNI`,
+Blocking-Modus, Cache, Admin-Session-Limits). Ändern → `up`. Ungültige Keys sind
+ungefährlich (FTL loggt sie als „invalid" und ignoriert sie). Alle gültigen Keys:
+```bash
+docker exec pihole pihole-FTL --config
+```
+> Wirft nach dem Aktivieren von DNSSEC eine einzelne Domain `SERVFAIL`, ist deren
+> DNSSEC upstream kaputt – dann `FTLCONF_dns_dnssec: "false"` setzen.
+
+**Blocklisten (Ads/Tracking/Malware)** liegen in der `gravity.db` (nicht in
+`pihole.toml`), daher nicht per `FTLCONF`. Reproduzierbar über das versionierte
+Skript mit kuratierten Listen (StevenBlack, OISD, HaGeZi Pro + Threat-Intel):
+```bash
+seed-lists            # = bash /opt/pihole/scripts/seed-adlists.sh
+```
+Listen ändern → URLs in `scripts/seed-adlists.sh` anpassen, `seed-lists` erneut.
+Nach einem Volume-Reset (`docker volume rm pihole_etc`) einmal `seed-lists`, um die
+Listen wiederherzustellen. Einzelne False-Positives in der Web-UI unter *Domains*
+freigeben.
+
 ---
 
 ## 9. Härtung

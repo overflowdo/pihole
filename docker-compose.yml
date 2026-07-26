@@ -47,6 +47,19 @@ services:
       FTLCONF_dns_listeningMode: "all"
       # WICHTIG (v6): /etc/dnsmasq.d/ laden -> aktiviert die Wildcard-Datei unten.
       FTLCONF_misc_etc_dnsmasq_d: "true"
+
+      # ── Sicherheit / Privacy ───────────────────────────────────────────────
+      # (Falsche FTLCONF-Keys sind ungefährlich: FTL loggt sie als "invalid" und
+      #  ignoriert sie. Alle gültigen Keys: docker exec pihole pihole-FTL --config)
+      FTLCONF_dns_dnssec: "true"           # DNSSEC-Validierung. FALLS einzelne Domains
+                                           #   SERVFAIL liefern -> hier auf "false" setzen.
+      FTLCONF_dns_domainNeeded: "true"     # Namen ohne Punkt nicht ins Internet leaken
+      FTLCONF_dns_bogusPriv: "true"        # Reverse-Lookups privater IPs nicht upstream fragen
+      FTLCONF_dns_blockESNI: "true"        # ESNI-Lookups blocken (verhindert Filter-Bypass)
+      FTLCONF_dns_blocking_mode: "NULL"    # blockierte Domains -> 0.0.0.0/:: (schnell, sauber)
+      FTLCONF_dns_cache_size: "10000"      # großer DNS-Cache -> weniger Upstream-Anfragen
+      FTLCONF_webserver_api_max_sessions: "6"    # max. gleichzeitige Admin-Logins
+      FTLCONF_webserver_session_timeout: "1800"  # Admin-Session-Timeout (Sekunden)
       # FTL als (gemapptes) root im Container laufen lassen. Unter userns-remap ist
       # das host-UID 100000 – KEIN echtes root. Nötig wegen no-new-privileges: der
       # Kernel ignoriert damit File-Caps beim exec, weshalb Pi-holes non-root-Weg

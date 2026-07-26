@@ -283,6 +283,9 @@
 
     # Wildcard-DNS verifizieren (*.apphost.lan -> App-Host-VM)
     verify = "bash /opt/pihole/scripts/verify-dns.sh";
+
+    # Kuratierte Blocklisten setzen + Gravity aktualisieren
+    seed-lists = "bash /opt/pihole/scripts/seed-adlists.sh";
   };
 
   # SSH – maximale Härtung (identisch zum apphost-Repo)
