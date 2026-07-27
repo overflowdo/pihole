@@ -45,8 +45,12 @@ services:
       # ── Sicherheit / Privacy ───────────────────────────────────────────────
       # (Falsche FTLCONF-Keys sind ungefährlich: FTL loggt sie als "invalid" und
       #  ignoriert sie. Alle gültigen Keys: docker exec pihole pihole-FTL --config)
-      FTLCONF_dns_dnssec: "true"           # DNSSEC-Validierung. FALLS einzelne Domains
-                                           #   SERVFAIL liefern -> hier auf "false" setzen.
+      # DNSSEC AUS: der FritzBox-Upstream (.1) liefert DNSSEC nicht sauber, und
+      # lokale Namen wie fritz.box sind unsigniert unter der echten .box-TLD ->
+      # mit dnssec=true landen sie (und viele andere) auf SERVFAIL ("Server failed").
+      # Für ECHTES DNSSEC bräuchtest du einen DNSSEC-fähigen Upstream (Cloudflare/
+      # Quad9) statt der FritzBox – siehe Installationsanleitung "Sicherheit & DNS".
+      FTLCONF_dns_dnssec: "false"
       FTLCONF_dns_domainNeeded: "true"     # Namen ohne Punkt nicht ins Internet leaken
       FTLCONF_dns_bogusPriv: "true"        # Reverse-Lookups privater IPs nicht upstream fragen
       FTLCONF_dns_blockESNI: "true"        # ESNI-Lookups blocken (verhindert Filter-Bypass)

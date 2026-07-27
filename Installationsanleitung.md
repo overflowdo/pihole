@@ -284,8 +284,17 @@ ungefährlich (FTL loggt sie als „invalid" und ignoriert sie). Alle gültigen 
 ```bash
 docker exec pihole pihole-FTL --config
 ```
-> Wirft nach dem Aktivieren von DNSSEC eine einzelne Domain `SERVFAIL`, ist deren
-> DNSSEC upstream kaputt – dann `FTLCONF_dns_dnssec: "false"` setzen.
+> **DNSSEC ist standardmäßig AUS** (`FTLCONF_dns_dnssec: "false"`). Grund: der
+> Standard-Upstream ist die **FritzBox (.1)**, die DNSSEC nicht sauber liefert, und
+> lokale Namen wie `fritz.box` sind unsigniert → mit DNSSEC=true kommt für sie (und
+> viele andere) `SERVFAIL` („Server failed"). Wer **echtes DNSSEC** will, stellt um:
+> - Upstream auf einen DNSSEC-fähigen Resolver: `FTLCONF_dns_upstreams: "1.1.1.1;1.0.0.1"`
+>   (Cloudflare) oder `9.9.9.9;149.112.112.112` (Quad9),
+> - `FTLCONF_dns_dnssec: "true"`,
+> - und für `fritz.box` (weil sonst nicht mehr über die FritzBox auflösbar) eine
+>   lokale Antwort in `dnsmasq.d/*.conf`: `address=/fritz.box/192.168.178.1`.
+>   (Einzelne Geräte-Namen `*.fritz.box` lassen sich mit DNSSEC nicht sauber lösen –
+>   dann lieber ganz bei der FritzBox als Upstream + DNSSEC aus bleiben.)
 
 **Blocklisten (Ads/Tracking/Malware)** liegen in der `gravity.db` (nicht in
 `pihole.toml`), daher nicht per `FTLCONF`. Reproduzierbar über das versionierte
