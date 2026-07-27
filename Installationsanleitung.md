@@ -312,14 +312,17 @@ Skript mit kuratierten Listen (StevenBlack, OISD, HaGeZi Pro + Threat-Intel):
 
 Übernommen aus dem apphost-Repo (identische Module/Optionen):
 
-- **Kein Container als root:** Docker `userns-remap = "default"` + `dockremap`
-  (Container-UID 0 → host-UID 100000+). Zusätzlich am Container `cap_drop: [ALL]`
-  (nur 6 nötige Caps zurück) und `no-new-privileges`. Kein `user:`-Override –
-  Pi-hole startet als *gemapptes* root (nötig für Init + Port-Bind), ist damit
-  aber host-UID 100000, nicht echtes root. Rechte-Modell: `/etc/pihole` ist ein
-  **Named Volume** (Docker vergibt die Rechte in der Remap-Range), `dnsmasq.d`
-  ein **world-readable `:ro`-Bind-Mount** – beide für den Container zugreifbar,
-  ohne den bind-mount-`chown`-Umweg, den apphost bei Authelia braucht.
+- **Container-Härtung / Networking:** Der Pi-hole-Container nutzt
+  **`network_mode: host`** (FTL bindet die Host-Interfaces direkt → IPv4 **und
+  IPv6** nativ + echte Client-IPs). Host-Networking verträgt sich nicht mit
+  `userns-remap`, daher `userns_mode: host` → der Container läuft als **echtes
+  root**. Auf dieser **dedizierten** DNS-VM bewusst so gewählt; gehärtet bleibt
+  er durch `cap_drop: [ALL]` (+ nur nötige Caps), `no-new-privileges`, das
+  System-seccomp/AppArmor und Resource-Limits. `/etc/pihole` = Named Volume,
+  `dnsmasq.d` = `:ro`-Bind-Mount.
+  *(Wer IPv6 nicht braucht und maximale Isolation will, kann alternativ zurück auf
+  Bridge + `userns-remap` + Port-Publishing — dann ist der Container nicht-root,
+  aber IPv6 wird aufwändig.)*
 - **Kernel:** Lockdown (`confidentiality`), `module.sig_enforce=1`, volle
   Spectre/Meltdown-Mitigations, IOMMU, Heap-Schutz, restriktive Sysctls; unnötige
   Module blacklisted (CIS).

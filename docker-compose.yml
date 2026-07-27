@@ -1,19 +1,14 @@
 # Pi-hole v6 – Wildcard-DNS für apphost.lan
 #
-# Läuft unter dem Docker-Daemon mit userns-remap (nixos/modules/docker.nix):
-# Container-UID 0 ist host-UID 100000+, also KEIN echtes root. Zusätzlich hier
-# per-Container gehärtet – gleicher Stil wie im apphost-Repo:
-#   cap_drop: [ALL] (+ nur die nötigen Caps), no-new-privileges, Resource-Limits.
+# HOST-Networking (network_mode: host): FTL bindet die Host-Interfaces direkt
+# -> IPv4 UND IPv6 nativ + echte Client-IPs. Host-Net verträgt sich nicht mit
+# userns-remap, daher userns_mode: host -> der Container läuft als ECHTES root.
+# Auf dieser dedizierten DNS-VM bewusst ok; gehärtet bleibt es per cap_drop:[ALL]
+# (nur nötige Caps), no-new-privileges, System-seccomp/AppArmor + Resource-Limits.
 name: pihole
 
-networks:
-  pihole-net:
-    name: pihole-net
-    driver: bridge
-
 volumes:
-  # Pi-hole-State (v6: pihole.toml, FTL-DB, Gravity, Listen). Named Volume, damit
-  # Docker unter userns-remap die Eigentümerrechte korrekt in die Remap-Range legt.
+  # Pi-hole-State (v6: pihole.toml, FTL-DB, Gravity, Listen).
   pihole_etc:
     name: pihole_etc
 
@@ -28,13 +23,12 @@ services:
     restart: unless-stopped
     runtime: runc
 
-    networks:
-      pihole-net: {}
-
-    ports:
-      - "53:53/tcp"
-      - "53:53/udp"
-      - "80:80/tcp"          # Admin-Weboberfläche (nftables lässt nur das LAN zu)
+    # Host-Networking: FTL lauscht direkt auf allen Host-Interfaces (0.0.0.0 + ::,
+    # inkl. der statischen IPv6-ULA). Keine ports:-Publizierung nötig; die
+    # nftables-Firewall (networking.nix) beschränkt 53/80 aufs LAN.
+    network_mode: "host"
+    # host-net verlangt das Opt-out aus userns-remap -> echtes root (s. Kopf-Kommentar).
+    userns_mode: "host"
 
     # docker compose liest ./.env automatisch für die ${...}-Interpolation.
     environment:
@@ -60,12 +54,10 @@ services:
       FTLCONF_dns_cache_size: "10000"      # großer DNS-Cache -> weniger Upstream-Anfragen
       FTLCONF_webserver_api_max_sessions: "6"    # max. gleichzeitige Admin-Logins
       FTLCONF_webserver_session_timeout: "1800"  # Admin-Session-Timeout (Sekunden)
-      # FTL als (gemapptes) root im Container laufen lassen. Unter userns-remap ist
-      # das host-UID 100000 – KEIN echtes root. Nötig wegen no-new-privileges: der
-      # Kernel ignoriert damit File-Caps beim exec, weshalb Pi-holes non-root-Weg
-      # (setcap auf pihole-FTL) scheitert: "Unable to set capabilities for
-      # pihole-FTL. Cannot run as non-root". Als Container-root nutzt FTL direkt
-      # die cap_add-Caps unten.
+      # FTL als root laufen lassen (bei host-net/userns_mode:host echtes root).
+      # Nötig wegen no-new-privileges: der Kernel ignoriert File-Caps beim exec,
+      # weshalb Pi-holes non-root-Weg (setcap auf pihole-FTL) scheitert. Als root
+      # nutzt FTL direkt die cap_add-Caps unten.
       DNSMASQ_USER: "root"
 
     volumes:
@@ -76,19 +68,14 @@ services:
       # /etc/pihole/ ab, hier wird also nichts überschrieben.
       - ./dnsmasq.d:/etc/dnsmasq.d:ro
 
-    # ── Rechte / UID-Modell (userns-remap) ─────────────────────────────────────
-    # Der Daemon läuft mit userns-remap: Container-UID 0 = host-UID 100000, also
-    # KEIN echtes root – das ist die "kein Container als root"-Garantie. Deshalb
-    # bewusst KEIN `user:`-Override: Pi-holes s6-Init läuft als (gemapptes) root,
-    # initialisiert /etc/pihole und bindet 53/80; FTL bleibt via DNSMASQ_USER=root
-    # (s.o.) ebenfalls gemapptes root (nötig wegen no-new-privileges). Ein
-    # erzwungenes user:1000 würde Pi-hole brechen (anders als z.B. Grafana im apphost).
-    #   • /etc/pihole = NAMED Volume  -> Docker vergibt die Rechte in der
-    #     Remap-Range, Container-root besitzt & initialisiert es (CHOWN-Cap).
-    #     Kein host-chown nötig (der Bind-Mount-Umweg wie bei apphosts Authelia
-    #     entfällt).
-    #   • dnsmasq.d = :ro Bind-Mount, world-readable (0644) -> im Container als
-    #     "nobody" sichtbar, aber lesbar. install.sh sichert die Modes explizit.
+    # ── Rechte / UID-Modell ────────────────────────────────────────────────────
+    # userns_mode: host -> der Container läuft als ECHTES root (nötig für
+    # host-networking). Deshalb KEIN `user:`-Override und DNSMASQ_USER=root:
+    # FTL läuft als root und nutzt direkt die cap_add-Caps unten (kein setcap).
+    #   • /etc/pihole = Named Volume -> gehört real root, FTL initialisiert es
+    #     direkt. Beim UMSTIEG von userns-remap gehört das alte Volume noch der
+    #     Remap-Range -> einmal frisch machen: down; docker volume rm pihole_etc; up.
+    #   • dnsmasq.d = :ro Bind-Mount, world-readable (0644) -> lesbar.
     #   • .env liest nur `docker compose` am Host (als pihole, 0600).
 
     # ── Härtung ────────────────────────────────────────────────────────────────

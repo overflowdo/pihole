@@ -18,7 +18,15 @@
 
   systemd.network.networks."10-lan" = {
     matchConfig.Name = "en*";                       # ggf. an echten NIC anpassen (ens18)
-    address          = [ "192.168.178.5/24" ];
+    address = [
+      "192.168.178.5/24"
+      # ── IPv6 (ULA) ──────────────────────────────────────────────────────────
+      # Aus dem FritzBox-ULA-Präfix fd6a:b598:8a8a::/64 (die ersten 4 Blöcke der
+      # Heimnetz-ULA; der Rest wie 36e1:a9ff:fe17:9fe6 ist nur die Geräte-Kennung).
+      # Pi-hole nimmt ::5 in diesem Präfix. GENAU diese Adresse (fd6a:b598:8a8a::5)
+      # trägst du in der FritzBox als "Lokaler DNSv6-Server" ein.
+      "fd6a:b598:8a8a::5/64"
+    ];
     routes           = [ { Gateway = "192.168.178.1"; } ];
     linkConfig.RequiredForOnline = "routable";
   };
@@ -78,9 +86,16 @@
           # SSH – nur aus dem LAN, ratenbegrenzt
           ip saddr 192.168.178.0/24 tcp dport 22 ct state new limit rate 5/minute burst 10 packets accept
 
-          # DNS – nur aus dem LAN (kein offener Resolver!)
+          # DNS (IPv4) – nur aus dem LAN (kein offener Resolver!)
           ip saddr 192.168.178.0/24 tcp dport 53 accept
           ip saddr 192.168.178.0/24 udp dport 53 accept
+
+          # DNS (IPv6) – aus dem LAN: ULA (fd00::/8) + Link-Local (fe80::/10).
+          # (Bei host-networking lauscht FTL direkt am Host -> Queries hier im input.)
+          ip6 saddr fd00::/8  tcp dport 53 accept
+          ip6 saddr fd00::/8  udp dport 53 accept
+          ip6 saddr fe80::/10 tcp dport 53 accept
+          ip6 saddr fe80::/10 udp dport 53 accept
 
           # Pi-hole-Admin-Weboberfläche – nur aus dem LAN
           ip saddr 192.168.178.0/24 tcp dport 80 accept
