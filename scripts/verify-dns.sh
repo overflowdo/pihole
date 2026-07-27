@@ -10,7 +10,7 @@ set -uo pipefail
 
 DNS_SERVER="${1:-192.168.178.5}"
 WILDCARD_DOMAIN="${WILDCARD_DOMAIN:-apphost.lan}"
-EXPECTED_IP="${EXPECTED_IP:-192.168.178.45}"
+EXPECTED_IP="${EXPECTED_IP:-192.168.178.6}"
 
 # Aus der Aufgabenstellung: Dienste laufen als diese Subdomains + Domain selbst.
 NAMES=(
